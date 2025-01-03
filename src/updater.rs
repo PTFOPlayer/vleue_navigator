@@ -4,6 +4,7 @@ use std::{
     time::Duration,
 };
 
+use itertools::Itertools;
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
@@ -354,7 +355,7 @@ fn trigger_navmesh_build<Marker: Component, Obstacle: ObstacleSource>(
     }
 
     let has_removed_obstacles = !removed_obstacles.is_empty();
-    let mut to_check = navmeshes
+    let to_check = navmeshes
         .iter_mut()
         .filter_map(|(entity, settings, _, mode, ..)| {
             if settings.is_changed()
@@ -370,10 +371,9 @@ fn trigger_navmesh_build<Marker: Component, Obstacle: ObstacleSource>(
             }
         })
         .chain(retrigger)
-        .collect::<Vec<_>>();
-    to_check.sort_unstable();
-    to_check.dedup();
-    for entity in to_check.into_iter() {
+        .sorted_unstable()
+        .unique();
+    for entity in to_check {
         if let Ok((
             entity,
             settings,
