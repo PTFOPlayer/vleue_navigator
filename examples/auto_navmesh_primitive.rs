@@ -86,9 +86,6 @@ fn setup(mut commands: Commands) {
             simplify: 0.05,
             ..default()
         },
-        // Mark it for update as soon as obstacles are changed.
-        // Other modes can be debounced or manually triggered.
-        NavMeshUpdateMode::Direct,
         // This transform places the (0, 0) point of the navmesh, and is used to transform coordinates from the world to the navmesh.
         Transform::from_translation(Vec3::new(
             -(MESH_WIDTH as f32) / 2.0 * FACTOR,

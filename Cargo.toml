@@ -102,4 +102,4 @@ required-features = ["avian3d", "detailed-layers"]
 features = ["detailed-layers"]
 
 [patch.crates-io]
-polyanya = {path = "../polyanya"}
+polyanya = {git = "https://github.com/PTFOPlayer/polyanya"}

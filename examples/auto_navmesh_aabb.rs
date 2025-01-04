@@ -84,9 +84,6 @@ fn setup(mut commands: Commands) {
             ]),
             ..default()
         },
-        // Mark it for update as soon as obstacles are changed.
-        // Other modes can be debounced or manually triggered.
-        NavMeshUpdateMode::Direct,
         Transform::from_translation(Vec3::new(
             -(MESH_WIDTH as f32) / 2.0 * FACTOR,
             -(MESH_HEIGHT as f32) / 2.0 * FACTOR,

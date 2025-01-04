@@ -28,7 +28,7 @@ pub struct CachableObstacle;
 
 /// A NavMesh that will be updated automatically.
 #[derive(Component, Debug, Deref)]
-#[require(NavMeshStatus, NavMeshUpdateMode, Transform, GlobalTransform)]
+#[require(NavMeshStatus, Transform, GlobalTransform)]
 pub struct ManagedNavMesh(Handle<NavMesh>);
 
 impl ManagedNavMesh {
@@ -113,6 +113,13 @@ pub struct NavMeshSettings {
     ///
     /// When using layers, applying the agent radius to outer edges can block stitching them together.
     pub agent_radius_on_outer_edge: bool,
+    /// If this is true, updating the [`NavMesh`] will be blocking.
+    /// Otherwise, it will be done asynchronous and occur on the [`AsyncComputeTaskPool`].
+    ///
+    /// This can cause the game to lag if updating the [`NavMesh`] takes longer than a frame. This is not recommended to use.
+    pub is_update_blocking: bool,
+    /// Control when to update the navmesh
+    pub update_mode: NavMeshUpdateMode,
 }
 
 impl Default for NavMeshSettings {
@@ -132,6 +139,8 @@ impl Default for NavMeshSettings {
             scale: Vec2::ONE,
             agent_radius: 0.0,
             agent_radius_on_outer_edge: false,
+            is_update_blocking: false,
+            update_mode: NavMeshUpdateMode::default(),
         }
     }
 }
@@ -157,7 +166,7 @@ pub enum NavMeshStatus {
 }
 
 /// Control when to update the navmesh
-#[derive(Component, Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum NavMeshUpdateMode {
     /// Update the [`NavMesh`] on every change.
     Direct,
@@ -172,13 +181,6 @@ impl Default for NavMeshUpdateMode {
         Self::OnDemand(false)
     }
 }
-
-/// If this component is added to an entity with the [`NavMeshBundle`], updating the [`NavMesh`] will be blocking.
-/// Otherwise, it will be done asynchronous and occur on the [`AsyncComputeTaskPool`].
-///
-/// This can cause the game to lag if updating the [`NavMesh`] takes longer than a frame. This is not recommended to use.
-#[derive(Component, Debug, Copy, Clone)]
-pub struct NavMeshUpdateModeBlocking;
 
 #[cfg_attr(feature = "tracing", instrument(skip_all))]
 fn build_navmesh<T: ObstacleSource>(
@@ -202,7 +204,7 @@ fn build_navmesh<T: ObstacleSource>(
                     .into_iter()
             })
             .filter(|p: &Vec<Vec2>| !p.is_empty())
-            .map(|p| p.into_iter().map(|v| v / scale).collect::<Vec<_>>());
+            .map(|p| p.into_iter().map(|v| v / scale));
         base.add_obstacles(obstacle_polys);
         if settings.simplify != 0.0 {
             base.simplify(settings.simplify);
@@ -222,7 +224,7 @@ fn build_navmesh<T: ObstacleSource>(
                 .into_iter()
         })
         .filter(|p: &Vec<Vec2>| !p.is_empty())
-        .map(|p| p.into_iter().map(|v| v / scale).collect::<Vec<_>>());
+        .map(|p| p.into_iter().map(|v| v / scale));
     triangulation.add_obstacles(obstacle_polys);
 
     if settings.simplify != 0.0 {
@@ -296,9 +298,7 @@ type NavMeshToUpdateQuery<'world, 'state, 'a, 'b, 'c, 'd, 'e, 'f> = Query<
         Entity,
         &'a mut NavMeshSettings,
         Ref<'b, GlobalTransform>,
-        &'c NavMeshUpdateMode,
         &'d mut NavMeshStatus,
-        Option<&'e NavMeshUpdateModeBlocking>,
         Option<&'f NavmeshUpdateTask>,
     ),
 >;
@@ -357,10 +357,10 @@ fn trigger_navmesh_build<Marker: Component, Obstacle: ObstacleSource>(
     let has_removed_obstacles = !removed_obstacles.is_empty();
     let to_check = navmeshes
         .iter_mut()
-        .filter_map(|(entity, settings, _, mode, ..)| {
+        .filter_map(|(entity, settings, ..)| {
             if settings.is_changed()
                 || has_removed_obstacles
-                || matches!(mode, NavMeshUpdateMode::OnDemand(true))
+                || matches!(settings.update_mode, NavMeshUpdateMode::OnDemand(true))
                 || dynamic_obstacles
                     .iter()
                     .any(|(t, o)| t.is_changed() || o.is_changed())
@@ -374,21 +374,14 @@ fn trigger_navmesh_build<Marker: Component, Obstacle: ObstacleSource>(
         .sorted_unstable()
         .unique();
     for entity in to_check {
-        if let Ok((
-            entity,
-            settings,
-            global_transform,
-            update_mode,
-            mut status,
-            is_blocking,
-            updating,
-        )) = navmeshes.get_mut(entity)
+        if let Ok((entity, mut settings, global_transform, mut status, updating)) =
+            navmeshes.get_mut(entity)
         {
             if let Some(val) = ready_to_update.get_mut(&entity) {
                 val.1 = true;
                 continue;
             }
-            match *update_mode {
+            match settings.update_mode {
                 NavMeshUpdateMode::Debounced(seconds) => {
                     ready_to_update.insert(entity, (seconds, false));
                 }
@@ -396,9 +389,7 @@ fn trigger_navmesh_build<Marker: Component, Obstacle: ObstacleSource>(
                     continue;
                 }
                 NavMeshUpdateMode::OnDemand(true) => {
-                    commands
-                        .entity(entity)
-                        .insert(NavMeshUpdateMode::OnDemand(false));
+                    settings.update_mode = NavMeshUpdateMode::OnDemand(false);
                 }
                 _ => (),
             };
@@ -423,7 +414,7 @@ fn trigger_navmesh_build<Marker: Component, Obstacle: ObstacleSource>(
             *status = NavMeshStatus::Building;
             let updating = NavmeshUpdateTask(Arc::new(RwLock::new(None)));
             let writer = updating.0.clone();
-            if is_blocking.is_some() {
+            if settings.is_update_blocking {
                 let start = bevy::utils::Instant::now();
                 let (to_cache, layer) = build_navmesh(
                     obstacles_local,

@@ -109,11 +109,11 @@ fn setup(
             simplify: 0.05,
             merge_steps: 0,
             agent_radius: 1.0,
+            update_mode: NavMeshUpdateMode::Direct,
             ..default()
         },
         // Mark it for update as soon as obstacles are changed.
         // Other modes available are debounced or manual trigger.
-        NavMeshUpdateMode::Direct,
         NavMeshDebug(palettes::tailwind::SLATE_800.into()),
         Transform::from_rotation(Quat::from_rotation_x(FRAC_PI_2)),
     ));

@@ -47,7 +47,7 @@ pub mod prelude {
     };
     pub use crate::updater::{
         CachableObstacle, ManagedNavMesh, NavMeshSettings, NavMeshStatus, NavMeshUpdateMode,
-        NavMeshUpdateModeBlocking, NavmeshUpdaterPlugin, NAVMESH_BUILD_DURATION,
+        NavmeshUpdaterPlugin, NAVMESH_BUILD_DURATION,
     };
     pub use crate::{NavMesh, Triangulation, VleueNavigatorPlugin};
     #[cfg(feature = "debug-with-gizmos")]

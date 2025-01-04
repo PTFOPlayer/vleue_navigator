@@ -1,3 +1,5 @@
+# CHANGES IN THIS REPO WILL LIKELY NOT BE MERGED TO `vleue_navigator`
+
 # Navigation for Bevy with NavMesh
 
 ![MIT/Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)
